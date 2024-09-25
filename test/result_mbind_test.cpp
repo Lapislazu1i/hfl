@@ -1,6 +1,7 @@
 #include "result.hpp"
 #include "result_function.hpp"
 #include <gtest/gtest.h>
+#include <system_error>
 
 
 static hfl::result<int> add_one(int val)
@@ -71,3 +72,13 @@ TEST(result_mbind_test, mbind_times_two_times_three_by_pipe_using_lambda)
     auto res = one | [](int v) -> hfl::result<int>{return v * 2;} | [](int v) -> hfl::result<int> { return v * 3;};
     EXPECT_EQ(6, res.value());
 }
+
+TEST(result_mbind_test, mbind_int_to_double)
+{
+    hfl::result<int> one {1};
+    auto res = one | [](int v) -> hfl::result<double>{return (double)v;};
+    const auto& dinfo = typeid(double);
+    const auto& rinfo = typeid(decltype(res.unwrap()));
+    EXPECT_EQ(dinfo, rinfo);
+}
+

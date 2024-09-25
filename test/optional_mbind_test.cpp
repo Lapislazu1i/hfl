@@ -1,6 +1,7 @@
 #include "optional_function.hpp"
 #include <gtest/gtest.h>
 #include <optional>
+#include <type_traits>
 
 
 static std::optional<int> add_one(int val)
@@ -58,4 +59,13 @@ TEST(optional_mbind_test, mbind_times_two_times_three)
     std::optional<int> one {1};
     auto res = hfl::mbind(hfl::mbind(one, &times_by_two), &times_by_three);
     EXPECT_EQ(6, res.value());
+}
+
+TEST(optional_mbind_test, mbind_int_to_double)
+{
+    std::optional<int> one {1};
+    auto res = hfl::mbind(one,  [](int v) -> std::optional<double>{return (double)v;});
+    const auto& dinfo = typeid(double);
+    const auto& rinfo = typeid(std::remove_cv_t<decltype(res.value())>);
+    EXPECT_EQ(dinfo, rinfo);
 }

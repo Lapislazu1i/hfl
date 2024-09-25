@@ -1,16 +1,18 @@
 #pragma once
+#include <type_traits>
 #include <variant>
 #include <system_error>
 
 namespace hfl
 {
 
-struct result_val_flag {};
 
-template<typename T = void>
+template<typename T>
 class result
 {
 public:
+
+result() = default;
 
 constexpr result(const T& val) : m_value(val) {}
 
@@ -50,13 +52,27 @@ constexpr const std::error_code& error_code() const
     return std::get<std::error_code>(m_value);
 }
 
+template<typename ValFunc, typename ErrFunc>
+constexpr void match(ValFunc&& val_func, ErrFunc&& err_func) const
+{
+    if(has_value())
+    {
+        val_func(value());
+    }
+    else 
+    {
+        err_func(error_code());
+    }
+}
+
+friend void swap(result& a, result& b)
+{
+    std::swap(a.m_value, b.m_value);
+}
+
 private:
 std::variant<T, std::error_code> m_value;
 };
 
-template<>
-class result<void> : public result<result_val_flag>
-{
-};
 
 }

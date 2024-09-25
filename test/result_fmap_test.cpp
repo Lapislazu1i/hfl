@@ -42,3 +42,12 @@ TEST(result_fmap_test, fmap_invoke_times_by_two_times_by_two)
     auto two_res = hfl::fmap(hfl::fmap(one, &times_by_two), &times_by_two);
     EXPECT_EQ(4, two_res.value());
 }
+
+TEST(result_fmap_test, fmap_int_to_double)
+{
+    hfl::result<int> one {1};
+    auto res = hfl::fmap(one, [](int v){return (double)v;});
+    const auto& dinfo = typeid(double);
+    const auto& rinfo = typeid(decltype(res.unwrap()));
+    EXPECT_EQ(dinfo, rinfo);
+}

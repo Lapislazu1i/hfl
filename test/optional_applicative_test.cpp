@@ -42,3 +42,13 @@ TEST(optional_applicative_test, applicative_normal_invoke_add_one_add_one)
     auto res = hfl::applicative(hfl::applicative(one, add_one_fuc), add_one_fuc);
     EXPECT_EQ(3, res.value());
 }
+
+TEST(optional_applicative_test, applicative_int_to_double)
+{
+    std::optional<int> one {1};
+    std::optional<std::function<double(int)>> f {[](int v){return (double)v;}};
+    auto res = hfl::applicative(one, f);
+    const auto& dinfo = typeid(double);
+    const auto& rinfo = typeid(std::remove_cv_t<decltype(res.value())>);
+    EXPECT_EQ(dinfo, rinfo);
+}
