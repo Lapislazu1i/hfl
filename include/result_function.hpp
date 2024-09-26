@@ -50,10 +50,9 @@ constexpr auto mbind(const result<T>& res, Func&& f) -> decltype(f(std::declval<
     }
 }
 
-template<typename T, typename Func>
-constexpr auto operator | (const result<T>& res, Func&& f)
+template <typename T, typename Func> constexpr auto operator|(const result<T>& res, Func&& f)
 {
-    return mbind<T, Func>(res,std::forward<Func>(f));
+    return mbind<T, Func>(res, std::forward<Func>(f));
 }
 
 } // namespace hfl

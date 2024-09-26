@@ -4,13 +4,14 @@ project(hfl)
 
 set(CMAKE_CXX_STANDARD 20)
 
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
-
 list(
     APPEND HFL_INDLCUE_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/optinal_function.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/memo.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/optional_function.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/result_function.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/result.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/timer.hpp"
 )
-
 
 add_library(hfl INTERFACE)
 
@@ -21,12 +22,9 @@ target_include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-
-
 target_sources(hfl INTERFACE ${HFL_INDLCUE_FILES})
 
 source_group("include" FILES ${HFL_INDLCUE_FILES})
-
 
 foreach(inc_file ${HFL_INDLCUE_FILES})
     message(STATUS  ${inc_file})
@@ -43,11 +41,13 @@ add_executable(
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_fmap_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_applicative_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_mbind_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/test/memo_test.cpp"
 
 )
 target_link_libraries(
-  hfl_test
+  hfl_test PRIVATE
   GTest::gtest_main
+  hfl
 )
 
 
