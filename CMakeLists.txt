@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD 20)
 
 list(
     APPEND HFL_INDLCUE_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/curried.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/function_trait.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/hfl_concept.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/memo.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/optional_function.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/result_function.hpp"
@@ -42,6 +45,7 @@ add_executable(
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_applicative_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_mbind_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/memo_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/test/curried_test.cpp"
 
 )
 target_link_libraries(
