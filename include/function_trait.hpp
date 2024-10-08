@@ -1,6 +1,7 @@
 #pragma once
-#include <tuple>
 #include <functional>
+#include <tuple>
+
 
 namespace hfl
 {
@@ -27,19 +28,39 @@ struct function_trait<R(Args...)>
     using arg_t = arg<N>::type;
 };
 
-template<typename R, typename ...Args>
-struct function_trait<std::function<R(Args...)>> : public function_trait<R(Args...)> {};
+template<typename R, typename... Args>
+struct function_trait<std::function<R(Args...)>> : public function_trait<R(Args...)>
+{
+};
 
 template<typename T>
-struct function_trait : public function_trait<decltype(&T::operator())> {};
+struct function_trait : public function_trait<decltype(&T::operator())>
+{
+};
 
-template<typename R, typename ...Args>
-struct function_trait<R(*)(Args...)> : public function_trait<R(Args...)> {};
+template<typename R, typename... Args>
+struct function_trait<R (*)(Args...)> : public function_trait<R(Args...)>
+{
+};
 
-template<typename C, typename R, typename ...Args>
-struct function_trait<R(C::*)(Args...)> : public function_trait<R(Args...)> {};
+template<typename C, typename R, typename... Args>
+struct function_trait<R (C::*)(Args...)> : public function_trait<R(Args...)>
+{
+};
 
-template<typename C, typename R, typename ...Args>
-struct function_trait<R(C::*)(Args...) const> : public function_trait<R(Args...)> {};
+template<typename C, typename R, typename... Args>
+struct function_trait<R (C::*)(Args...) const> : public function_trait<R(Args...)>
+{
+};
 
-}
+template<typename C, typename R, typename... Args>
+struct function_trait<R (C::*)(Args...) const&> : public function_trait<R(Args...)>
+{
+};
+
+template<typename C, typename R, typename... Args>
+struct function_trait<R (C::*)(Args...) &&> : public function_trait<R(Args...)>
+{
+};
+
+} // namespace hfl

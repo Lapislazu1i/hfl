@@ -1,12 +1,14 @@
 #pragma once
-#include <tuple>
-#include <mutex>
 #include <map>
+#include <mutex>
+#include <tuple>
 
 namespace hfl
 {
 
-class null_param{};
+class null_param
+{
+};
 
 template<typename Sig, typename F>
 class memoize_helper;
@@ -16,11 +18,13 @@ class memoize_helper<Ret(Args...), F>
 {
 public:
     template<typename Function>
-    constexpr memoize_helper(Function&& f, null_param)
-        : m_f(f) {}
+    constexpr memoize_helper(Function&& f, null_param) : m_f(f)
+    {
+    }
 
-    constexpr memoize_helper(const memoize_helper& other)
-        : m_f(other.f){}
+    constexpr memoize_helper(const memoize_helper& other) : m_f(other.f)
+    {
+    }
 
     template<typename... InnerArgs>
     Ret operator()(InnerArgs&&... args) const
@@ -28,7 +32,7 @@ public:
         std::unique_lock<std::mutex> lock(m_cache_mutex);
         const auto args_tuple = std::make_tuple(args...);
         const auto cached = m_cache.find(args_tuple);
-        if(cached != m_cache.end())
+        if (cached != m_cache.end())
         {
             return cached->second;
         }
@@ -53,11 +57,13 @@ class recursive_memoize_helper<Ret(Args...), F>
 {
 public:
     template<typename Function>
-    constexpr recursive_memoize_helper(Function&& f, null_param)
-        : m_f(f) {}
+    constexpr recursive_memoize_helper(Function&& f, null_param) : m_f(f)
+    {
+    }
 
-    constexpr recursive_memoize_helper(const recursive_memoize_helper& other)
-        : m_f(other.f){}
+    constexpr recursive_memoize_helper(const recursive_memoize_helper& other) : m_f(other.f)
+    {
+    }
 
     template<typename... InnerArgs>
     Ret operator()(InnerArgs&&... args) const
@@ -65,7 +71,7 @@ public:
         std::unique_lock<std::recursive_mutex> lock(m_cache_mutex);
         const auto args_tuple = std::make_tuple(args...);
         const auto cached = m_cache.find(args_tuple);
-        if(cached != m_cache.end())
+        if (cached != m_cache.end())
         {
             return cached->second;
         }
@@ -95,4 +101,4 @@ constexpr memoize_helper<Sig, std::decay_t<F>> make_memo(F&& f)
     return {std::forward<F>(f), null_param{}};
 }
 
-}
+} // namespace hfl

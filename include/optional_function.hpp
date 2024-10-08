@@ -1,13 +1,12 @@
 #pragma once
+#include "optional.hpp"
 #include <functional>
-#include <optional>
-
 
 namespace hfl
 {
 
-template <typename T, typename Func>
-constexpr auto fmap(const std::optional<T>& res, Func&& f) -> std::optional<decltype(f(std::declval<T>()))>
+template<typename T, typename Func>
+constexpr auto fmap(const optional<T>& res, Func&& f) -> optional<decltype(f(std::declval<T>()))>
 {
     if (res.has_value())
     {
@@ -19,9 +18,8 @@ constexpr auto fmap(const std::optional<T>& res, Func&& f) -> std::optional<decl
     }
 }
 
-template <typename T, typename Ret>
-constexpr auto applicative(const std::optional<T>& res, const std::optional<std::function<Ret(T)>>& f)
-    -> std::optional<Ret>
+template<typename T, typename Ret>
+constexpr auto applicative(const optional<T>& res, const optional<std::function<Ret(T)>>& f) -> optional<Ret>
 {
     if (res.has_value() && f.has_value())
     {
@@ -33,8 +31,8 @@ constexpr auto applicative(const std::optional<T>& res, const std::optional<std:
     }
 }
 
-template <typename T, typename Func>
-constexpr auto mbind(const std::optional<T>& res, Func&& f) -> decltype(f(std::declval<T>()))
+template<typename T, typename Func>
+constexpr auto mbind(const optional<T>& res, Func&& f) -> decltype(f(std::declval<T>()))
 {
     if (res.has_value())
     {
@@ -46,5 +44,16 @@ constexpr auto mbind(const std::optional<T>& res, Func&& f) -> decltype(f(std::d
     }
 }
 
+template<typename T, typename Func>
+constexpr auto operator^(optional<T> res, Func&& f)
+{
+    return mbind<T, Func>(res, std::forward<Func>(f));
+}
+
+template<typename T, typename... Funcs>
+constexpr auto pipeline(const optional<T>& res, Funcs&&... f)
+{
+    return ((res ^ ... ^ f));
+}
 
 } // namespace hfl

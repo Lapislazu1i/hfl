@@ -62,21 +62,21 @@ TEST(result_mbind_test, mbind_times_two_times_three)
 TEST(result_mbind_test, mbind_times_two_times_three_by_pipe)
 {
     hfl::result<int> one {1};
-    auto res = one | times_by_two | times_by_three;
+    auto res = one ^ times_by_two ^ times_by_three;
     EXPECT_EQ(6, res.value());
 }
 
 TEST(result_mbind_test, mbind_times_two_times_three_by_pipe_using_lambda)
 {
     hfl::result<int> one {1};
-    auto res = one | [](int v) -> hfl::result<int>{return v * 2;} | [](int v) -> hfl::result<int> { return v * 3;};
+    auto res = one ^ [](int v) -> hfl::result<int>{return v * 2;} ^ [](int v) -> hfl::result<int> { return v * 3;};
     EXPECT_EQ(6, res.value());
 }
 
 TEST(result_mbind_test, mbind_int_to_double)
 {
     hfl::result<int> one {1};
-    auto res = one | [](int v) -> hfl::result<double>{return (double)v;};
+    auto res = one ^ [](int v) -> hfl::result<double>{return (double)v;};
     const auto& dinfo = typeid(double);
     const auto& rinfo = typeid(decltype(res.unwrap()));
     EXPECT_EQ(dinfo, rinfo);

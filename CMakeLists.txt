@@ -44,6 +44,7 @@ add_executable(
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_fmap_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_applicative_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_mbind_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/test/result_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/memo_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/curried_test.cpp"
 

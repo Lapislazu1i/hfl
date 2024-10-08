@@ -2,16 +2,15 @@
 #include "result.hpp"
 #include <functional>
 
-
 namespace hfl
 {
 
-template <typename T, typename Func>
+template<typename T, typename Func>
 constexpr auto fmap(const result<T>& opt, Func&& f) -> result<decltype(f(std::declval<T>()))>
 {
     if (opt.has_value())
     {
-        return f(opt.value());
+        return f(opt.unwrap());
     }
     else
     {
@@ -19,7 +18,7 @@ constexpr auto fmap(const result<T>& opt, Func&& f) -> result<decltype(f(std::de
     }
 }
 
-template <typename T, typename Ret>
+template<typename T, typename Ret>
 constexpr auto applicative(const result<T>& res, const result<std::function<Ret(T)>>& f) -> result<Ret>
 {
     if (res.has_value() && f.has_value())
@@ -37,12 +36,12 @@ constexpr auto applicative(const result<T>& res, const result<std::function<Ret(
     }
 }
 
-template <typename T, typename Func>
+template<typename T, typename Func>
 constexpr auto mbind(const result<T>& res, Func&& f) -> decltype(f(std::declval<T>()))
 {
     if (res.has_value())
     {
-        return f(res.value());
+        return f(res.unwrap());
     }
     else
     {
@@ -50,9 +49,16 @@ constexpr auto mbind(const result<T>& res, Func&& f) -> decltype(f(std::declval<
     }
 }
 
-template <typename T, typename Func> constexpr auto operator|(const result<T>& res, Func&& f)
+template<typename T, typename Func>
+constexpr auto operator^(result<T> res, Func&& f)
 {
     return mbind<T, Func>(res, std::forward<Func>(f));
+}
+
+template<typename T, typename... Funcs>
+constexpr auto pipeline(const result<T>& res, Funcs&&... f)
+{
+    return ((res ^ ... ^ f));
 }
 
 } // namespace hfl

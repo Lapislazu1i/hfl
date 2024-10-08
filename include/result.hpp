@@ -3,17 +3,17 @@
 #include <type_traits>
 #include <variant>
 
-
 namespace hfl
 {
 
 
-template <typename T> class result
+template<typename T>
+class result
 {
 public:
-    result() = default;
+    result() noexcept = default;
 
-    constexpr result(const T& val) : m_value(val)
+    constexpr result(const T& val) noexcept : m_value(val)
     {
     }
 
@@ -21,15 +21,15 @@ public:
     {
     }
 
-    constexpr result(const std::error_code& val) : m_value(val)
+    constexpr result(const std::error_code& val) noexcept : m_value(val)
     {
     }
 
-    constexpr result(std::error_code&& val) : m_value(std::move(val))
+    constexpr result(std::error_code&& val) noexcept : m_value(std::move(val))
     {
     }
 
-    constexpr bool has_value() const
+    constexpr bool has_value() const noexcept
     {
         return std::holds_alternative<T>(m_value);
     }
@@ -39,7 +39,12 @@ public:
         return std::get<T>(m_value);
     }
 
-    constexpr T value_or(T&& right) const
+    constexpr T value() &&
+    {
+        return std::get<T>(m_value);
+    }
+
+    constexpr T value_or(T&& right) const noexcept
     {
         if (has_value())
         {
@@ -63,16 +68,17 @@ public:
         return std::get<T>(m_value);
     }
 
-    constexpr const std::error_code& error_code() const&
+    constexpr std::error_code error_code() const
     {
         return std::get<std::error_code>(m_value);
     }
 
-    template <typename ValFunc, typename ErrFunc> constexpr void match(ValFunc&& val_func, ErrFunc&& err_func) const
+    template<typename ValFunc, typename ErrFunc>
+    constexpr void match(ValFunc&& val_func, ErrFunc&& err_func) const
     {
         if (has_value())
         {
-            val_func(value());
+            val_func(unwrap());
         }
         else
         {
@@ -84,6 +90,20 @@ public:
     {
         std::swap(a.m_value, b.m_value);
     }
+
+    template<typename Func>
+    constexpr auto bind(Func&& f) -> decltype(f(std::declval<T>()))
+    {
+        if (this->has_value())
+        {
+            return f(this->unwrap());
+        }
+        else
+        {
+            return decltype(f(std::declval<T>())){this->error_code()};
+        }
+    }
+
 
 private:
     std::variant<T, std::error_code> m_value;

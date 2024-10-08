@@ -1,4 +1,5 @@
 #include <chrono>
+
 namespace hfl
 {
 
@@ -20,7 +21,8 @@ public:
         m_end = std::chrono::high_resolution_clock::now();
     }
 
-    template <typename T = std::chrono::milliseconds> auto elapsed_time() const
+    template<typename T = std::chrono::milliseconds>
+    auto elapsed_time() const
     {
         auto duration = m_end - m_start;
         return std::chrono::duration_cast<T>(duration);
