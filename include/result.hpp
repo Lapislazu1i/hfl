@@ -109,5 +109,7 @@ private:
     std::variant<T, std::error_code> m_value;
 };
 
+template<typename T>
+result(T) -> result<T>;
 
 } // namespace hfl
