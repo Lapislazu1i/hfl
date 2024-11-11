@@ -57,6 +57,10 @@ public:
     template<typename FT, typename FE, typename Func>
     friend constexpr auto mbind(const rs_result<FT, FE>& res, Func&& f) -> decltype(f(std::declval<FT>()));
 
+    template<typename FT, typename FE, typename Func>
+    friend constexpr auto mbind(rs_result<FT, FE>&& res, Func&& f) -> decltype(f(std::declval<FT>()));
+
+
     rs_result() noexcept = default;
 
     constexpr rs_result(const ok_type& val) noexcept : m_value(val)
@@ -65,8 +69,8 @@ public:
 
     constexpr rs_result(ok_type&& val) noexcept : m_value(std::move(val))
     {
-    }
 
+    }
     constexpr rs_result(const err_type& val) noexcept : m_value(val)
     {
     }
@@ -146,7 +150,7 @@ public:
     }
 
     template<typename OkFunc, typename ErrFunc>
-    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) const noexcept
+    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) & noexcept
     {
         if (is_ok())
         {
@@ -159,7 +163,7 @@ public:
     }
 
     template<typename OkFunc, typename ErrFunc>
-    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) noexcept
+    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) const& noexcept
     {
         if (is_ok())
         {
@@ -168,6 +172,32 @@ public:
         else
         {
             return err_func(std::get<err_type>(m_value));
+        }
+    }
+
+    template<typename OkFunc, typename ErrFunc>
+    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) && noexcept
+    {
+        if (is_ok())
+        {
+            return val_func(std::move(std::get<ok_type>(m_value)));
+        }
+        else
+        {
+            return err_func(std::move(std::get<err_type>(m_value)));
+        }
+    }
+
+    template<typename OkFunc, typename ErrFunc>
+    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) const&& noexcept
+    {
+        if (is_ok())
+        {
+            return val_func(std::move(std::get<ok_type>(m_value)));
+        }
+        else
+        {
+            return err_func(std::move(std::get<err_type>(m_value)));
         }
     }
 
@@ -333,26 +363,49 @@ private:
 template<typename FT, typename FE, typename Func>
 constexpr auto mbind(const rs_result<FT, FE>& res, Func&& f) -> decltype(f(std::declval<FT>()))
 {
-    if (res.is_ok())
-    {
-        return f(res.inter_unwrap_ok().m_value);
-    }
-    else
-    {
-        return decltype(f(std::declval<FT>())){res.inter_unwrap_err()};
-    }
+        return res.match(
+            [&f](const rs_result<FT, FE>::ok_type& v) {
+                return f(v.m_value);
+            },
+            [](const rs_result<FT, FE>::err_type& e) {
+                return decltype(f(std::declval<FT>())){e};
+            }); 
+}
+
+template<typename FT, typename FE, typename Func>
+constexpr auto mbind(rs_result<FT, FE>&& res, Func&& f) -> decltype(f(std::declval<FT>()))
+{
+        return std::move(res).match(
+            [&f](rs_result<FT, FE>::ok_type&& v) {
+                return f(std::move(v.m_value));
+            },
+            [](rs_result<FT, FE>::err_type&& e) {
+                return decltype(f(std::declval<FT>())){std::move(e)};
+            }); 
 }
 
 template<typename T, typename E, typename Func>
-constexpr decltype(auto) operator|(rs_result<T, E> res, Func&& f)
+constexpr decltype(auto) operator|(const rs_result<T, E>& res, Func&& f)
 {
     return mbind<T, E, Func>(res, std::forward<Func>(f));
+}
+
+template<typename T, typename E, typename Func>
+constexpr decltype(auto) operator|(rs_result<T, E>&& res, Func&& f)
+{
+    return mbind<T, E, Func>(std::move(res), std::forward<Func>(f));
 }
 
 template<typename T, typename E, typename... Funcs>
 constexpr decltype(auto) pipeline(const rs_result<T, E>& res, Funcs&&... f)
 {
     return ((res | ... | f));
+}
+
+template<typename T, typename E, typename... Funcs>
+constexpr decltype(auto) pipeline(rs_result<T, E>&& res, Funcs&&... f)
+{
+    return ((std::move(res) | ... | f));
 }
 
 template<typename T, typename E, typename OkFunc, typename ErrFunc>

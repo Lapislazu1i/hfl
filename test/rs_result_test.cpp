@@ -1,6 +1,33 @@
 #include "rs_result.hpp"
 #include <gtest/gtest.h>
 #include <system_error>
+#include <string>
+
+struct test_move_string
+{
+    test_move_string(const char* str) : m_buf(str) {}
+    test_move_string(const test_move_string& v) 
+    {
+        m_buf = v.m_buf;
+    }
+    test_move_string(test_move_string&& v) 
+    {
+        m_buf = v.m_buf;
+        v.m_buf = std::string{};
+    }
+    test_move_string& operator=(const test_move_string& v) 
+    {
+        m_buf = v.m_buf;
+        return *this;
+    }
+    test_move_string& operator=(test_move_string&& v) 
+    {
+        m_buf = v.m_buf;
+        v.m_buf = std::string{};
+        return *this;
+    }
+    std::string m_buf;
+};
 
 static hfl::rs_result<int, std::string> times_by_two(int val)
 {
@@ -281,4 +308,83 @@ TEST(rs_result_test, rs_result_coped)
     hfl::rs_result<int, float> r2 = b.copied();
 
     EXPECT_EQ(2, b.unwrap());
+}
+
+TEST(rs_result_test, rs_result_test_move_mbind)
+{
+    hfl::rs_result<test_move_string, float> b{hfl::ok{test_move_string{"123"}}};\
+    hfl::rs_result<test_move_string, float> c = b;
+    auto f1 = [](test_move_string&& val){
+        test_move_string tmp1 = std::move(val);
+        tmp1.m_buf += "a";
+        return hfl::rs_result<test_move_string, float>(hfl::ok<test_move_string>{std::move(tmp1)});
+    };
+    auto f2 = [](test_move_string&& val){
+        test_move_string tmp1 = std::move(val);
+        tmp1.m_buf += "b";
+        return hfl::rs_result<test_move_string, float>(hfl::ok<test_move_string>{std::move(tmp1)});
+    };
+    auto r1 = hfl::mbind(std::move(b), f1);
+    EXPECT_EQ(true, b.unwrap().m_buf.empty());
+    EXPECT_EQ("123a", r1.unwrap().m_buf);
+
+    auto r2 = hfl::mbind(std::move(r1), f2);
+    EXPECT_EQ(true, r1.unwrap().m_buf.empty());
+    EXPECT_EQ("123ab", r2.unwrap().m_buf);
+    auto r3 = hfl::mbind(hfl::mbind(std::move(c) , f2), f1);
+    EXPECT_EQ("123ba", r3.unwrap().m_buf);
+    EXPECT_EQ(true, c.unwrap().m_buf.empty());
+
+}
+
+TEST(rs_result_test, rs_result_test_move_pipe_operator)
+{
+    hfl::rs_result<test_move_string, float> b{hfl::ok{test_move_string{"123"}}};\
+    hfl::rs_result<test_move_string, float> c = b;
+    auto f1 = [](test_move_string&& val){
+        test_move_string tmp1 = std::move(val);
+        tmp1.m_buf += "a";
+        return hfl::rs_result<test_move_string, float>(hfl::ok<test_move_string>{std::move(tmp1)});
+    };
+    auto f2 = [](test_move_string&& val){
+        test_move_string tmp1 = std::move(val);
+        tmp1.m_buf += "b";
+        return hfl::rs_result<test_move_string, float>(hfl::ok<test_move_string>{std::move(tmp1)});
+    };
+    auto r1 = std::move(b) | f1;
+    EXPECT_EQ(true, b.unwrap().m_buf.empty());
+    EXPECT_EQ("123a", r1.unwrap().m_buf);
+
+    auto r2 = std::move(r1) | f2;
+    EXPECT_EQ(true, r1.unwrap().m_buf.empty());
+    EXPECT_EQ("123ab", r2.unwrap().m_buf);
+    auto r3 = std::move(c) | f2 | f1;
+    EXPECT_EQ("123ba", r3.unwrap().m_buf);
+    EXPECT_EQ(true, c.unwrap().m_buf.empty());
+}
+
+TEST(rs_result_test, rs_result_test_move_pipeline)
+{
+    hfl::rs_result<test_move_string, float> b{hfl::ok{test_move_string{"123"}}};\
+    hfl::rs_result<test_move_string, float> c = b;
+    auto f1 = [](test_move_string&& val){
+        test_move_string tmp1 = std::move(val);
+        tmp1.m_buf += "a";
+        return hfl::rs_result<test_move_string, float>(hfl::ok<test_move_string>{std::move(tmp1)});
+    };
+    auto f2 = [](test_move_string&& val){
+        test_move_string tmp1 = std::move(val);
+        tmp1.m_buf += "b";
+        return hfl::rs_result<test_move_string, float>(hfl::ok<test_move_string>{std::move(tmp1)});
+    };
+    auto r1 = hfl::pipeline(std::move(b) , f1);
+    EXPECT_EQ(true, b.unwrap().m_buf.empty());
+    EXPECT_EQ("123a", r1.unwrap().m_buf);
+
+    auto r2 = hfl::pipeline(std::move(r1) , f2);
+    EXPECT_EQ(true, r1.unwrap().m_buf.empty());
+    EXPECT_EQ("123ab", r2.unwrap().m_buf);
+    auto r3 = hfl::pipeline(std::move(c) , f2 , f1);
+    EXPECT_EQ("123ba", r3.unwrap().m_buf);
+    EXPECT_EQ(true, c.unwrap().m_buf.empty());
 }
