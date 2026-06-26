@@ -165,15 +165,15 @@ TEST(rs_result_test, rs_result_map)
 TEST(rs_result_test, rs_result_map_or)
 {
     hfl::rs_result<int, float> a{hfl::ok<int>{3}};
-    auto b = a.map_or(22.3, [](hfl::ok<int> v) -> hfl::rs_result<double, float>
+    auto b = a.map_or(22.3, [](int v) -> double
     {
-        return hfl::ok<double>(2 * v.m_value);
+        return double(2 * v);
     });
 
     hfl::rs_result<int, float> c{hfl::err<float>{3.f}};
-    auto d = c.map_or(22.3, [](hfl::ok<int> v) -> hfl::rs_result<double, float>
+    auto d = c.map_or(22.3, [](int v) -> double
     {
-        return hfl::ok<double>(2 * v.m_value);
+        return double(2 * v);
     });
 
     EXPECT_EQ(6.0, b);
@@ -183,15 +183,15 @@ TEST(rs_result_test, rs_result_map_or)
 TEST(rs_result_test, rs_result_map_or_else)
 {
     hfl::rs_result<int, float> a{hfl::ok<int>{3}};
-    auto b = a.map_or_else([](hfl::err<float>){return 22.3;}, [](hfl::ok<int> v) -> hfl::rs_result<double, float>
+    auto b = a.map_or_else([]() -> double {return 22.3;}, [](int v) -> double
     {
-        return hfl::ok<double>(2 * v.m_value);
+        return double(2 * v);
     });
 
     hfl::rs_result<int, float> c{hfl::err<float>{3.f}};
-    auto d = c.map_or_else([](hfl::err<float>){return 22.3;}, [](hfl::ok<int> v) -> hfl::rs_result<double, float>
+    auto d = c.map_or_else([]() -> double {return 22.3;}, [](int v) -> double
     {
-        return hfl::ok<double>(2 * v.m_value);
+        return double(2 * v);
     });
 
     EXPECT_EQ(6.0, b);
@@ -233,7 +233,6 @@ TEST(rs_result_test, rs_result_and_then)
     hfl::rs_result<int, std::string> c{hfl::err<std::string>{"hh"}};
     auto r1 = b.and_then(times_by_two).and_then(times_by_three);
     auto r2 = c.and_then(times_by_two).and_then(times_by_three);
-    
     EXPECT_EQ(3 * 2 * 3, r1.unwrap());
     EXPECT_EQ(true, r2.is_err());
     EXPECT_EQ(false, r2.is_ok());

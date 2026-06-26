@@ -4,7 +4,6 @@
 #include <type_traits>
 #include <variant>
 
-
 namespace hfl
 {
 
@@ -32,6 +31,10 @@ struct unwrap_exception : public std::exception
     unwrap_exception(const err<E>& e) : m_e(e)
     {
     }
+    const char* what() const noexcept override
+    {
+        return "unwrap_exception";
+    }
     err<E> m_e;
 };
 
@@ -41,9 +44,30 @@ struct unwrap_err_exception : public std::exception
     unwrap_err_exception(const ok<T>& v) : m_v(v)
     {
     }
+
+    const char* what() const noexcept override
+    {
+        return "unwrap_err_exception";
+    }
+
     ok<T> m_v;
 };
 
+template<typename T, typename E>
+class rs_result;
+
+template<typename T>
+struct is_rs_result : std::false_type
+{
+};
+
+template<typename T, typename E>
+struct is_rs_result<rs_result<T, E>> : std::true_type
+{
+};
+
+template<typename T>
+constexpr bool is_rs_result_v = is_rs_result<T>::value;
 
 template<typename T, typename E>
 class rs_result
@@ -51,8 +75,8 @@ class rs_result
 public:
     using ok_type = ok<T>;
     using err_type = err<E>;
-    using row_ok_type = std::remove_cvref_t<T>;
-    using row_err_type = std::remove_cvref_t<E>;
+    using raw_ok_type = std::remove_cvref_t<T>;
+    using raw_err_type = std::remove_cvref_t<E>;
 
     template<typename FT, typename FE, typename Func>
     friend constexpr auto mbind(const rs_result<FT, FE>& res, Func&& f) -> decltype(f(std::declval<FT>()));
@@ -60,8 +84,9 @@ public:
     template<typename FT, typename FE, typename Func>
     friend constexpr auto mbind(rs_result<FT, FE>&& res, Func&& f) -> decltype(f(std::declval<FT>()));
 
-
-    rs_result() noexcept = default;
+    constexpr rs_result() noexcept : m_value(ok<T>{})
+    {
+    }
 
     constexpr rs_result(const ok_type& val) noexcept : m_value(val)
     {
@@ -69,7 +94,6 @@ public:
 
     constexpr rs_result(ok_type&& val) noexcept : m_value(std::move(val))
     {
-
     }
     constexpr rs_result(const err_type& val) noexcept : m_value(val)
     {
@@ -111,7 +135,7 @@ public:
 
     constexpr std::remove_cvref_t<T> unwrap() const
     {
-        if (is_err())
+        if (is_err()) [[unlikely]]
         {
             throw unwrap_exception{inter_unwrap_err()};
         }
@@ -121,7 +145,7 @@ public:
 
     constexpr T unwrap()
     {
-        if (is_err())
+        if (is_err()) [[unlikely]]
         {
             throw unwrap_exception{inter_unwrap_err()};
         }
@@ -142,7 +166,7 @@ public:
 
     constexpr E unwrap_err() const
     {
-        if (is_ok())
+        if (is_ok()) [[unlikely]]
         {
             throw unwrap_err_exception{inter_unwrap_ok()};
         }
@@ -150,9 +174,27 @@ public:
     }
 
     template<typename OkFunc, typename ErrFunc>
-    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) & noexcept
+        requires std::is_invocable_v<OkFunc, ok_type&> and std::is_invocable_v<ErrFunc, err_type&>
+    constexpr decltype(auto) match(OkFunc&& val_func,
+                                   ErrFunc&& err_func) & noexcept(std::is_nothrow_invocable_v<OkFunc, ok_type&> and
+                                                                  std::is_nothrow_invocable_v<ErrFunc, err_type&>)
     {
-        if (is_ok())
+        if (is_ok()) [[likely]]
+        {
+            return std::invoke(std::forward<OkFunc>(val_func), std::get<ok_type>(m_value));
+        }
+        else
+        {
+            return std::invoke(std::forward<ErrFunc>(err_func), std::get<err_type>(m_value));
+        }
+    }
+
+    template<typename OkFunc, typename ErrFunc>
+        requires std::is_invocable_v<OkFunc, const ok_type&> and std::is_invocable_v<ErrFunc, const err_type&>
+    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) const& noexcept(
+        std::is_nothrow_invocable_v<OkFunc, const ok_type&> and std::is_nothrow_invocable_v<ErrFunc, const err_type&>)
+    {
+        if (is_ok()) [[likely]]
         {
             return val_func(std::get<ok_type>(m_value));
         }
@@ -163,22 +205,12 @@ public:
     }
 
     template<typename OkFunc, typename ErrFunc>
-    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) const& noexcept
+        requires std::is_invocable_v<OkFunc, ok_type&&> and std::is_invocable_v<ErrFunc, err_type&&>
+    constexpr decltype(auto) match(OkFunc&& val_func,
+                                   ErrFunc&& err_func) && noexcept(std::is_nothrow_invocable_v<OkFunc, ok_type&&> and
+                                                                   std::is_nothrow_invocable_v<ErrFunc, err_type&&>)
     {
-        if (is_ok())
-        {
-            return val_func(std::get<ok_type>(m_value));
-        }
-        else
-        {
-            return err_func(std::get<err_type>(m_value));
-        }
-    }
-
-    template<typename OkFunc, typename ErrFunc>
-    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) && noexcept
-    {
-        if (is_ok())
+        if (is_ok()) [[likely]]
         {
             return val_func(std::move(std::get<ok_type>(m_value)));
         }
@@ -189,9 +221,11 @@ public:
     }
 
     template<typename OkFunc, typename ErrFunc>
-    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) const&& noexcept
+        requires std::is_invocable_v<OkFunc, const ok_type&&> and std::is_invocable_v<ErrFunc, const err_type&&>
+    constexpr decltype(auto) match(OkFunc&& val_func, ErrFunc&& err_func) const&& noexcept(
+        std::is_nothrow_invocable_v<OkFunc, const ok_type&&> and std::is_nothrow_invocable_v<ErrFunc, const err_type&&>)
     {
-        if (is_ok())
+        if (is_ok()) [[likely]]
         {
             return val_func(std::move(std::get<ok_type>(m_value)));
         }
@@ -201,150 +235,176 @@ public:
         }
     }
 
-    void swap(rs_result& b)
+    void swap(rs_result& b) noexcept(
+        std::is_nothrow_invocable_v<std::swap, std::variant<ok_type, err_type>&, std::variant<ok_type, err_type>&>)
     {
         std::swap(m_value, b.m_value);
     }
 
-    friend void swap(rs_result& a, rs_result& b)
+    friend void swap(rs_result& a, rs_result& b) noexcept(
+        std::is_nothrow_invocable_v<std::swap, std::variant<ok_type, err_type>&, std::variant<ok_type, err_type>&>)
     {
         a.swap(b);
     }
 
     template<typename Func>
-    constexpr bool is_ok_and(Func&& f) const noexcept
+        requires std::is_invocable_r_v<bool, Func, raw_ok_type>
+    constexpr bool is_ok_and(Func&& f) const noexcept(std::is_nothrow_invocable_r_v<bool, Func, raw_ok_type>)
     {
         return match(
-            [&f](const ok_type& v) {
-                return f(v.m_value);
+            [&f](const ok_type& v) noexcept(std::is_nothrow_invocable_r_v<bool, Func, raw_ok_type>) {
+                return std::invoke(std::forward<Func>(f), v.m_value);
             },
-            [](const err_type& e) {
-                return false;
-            });
+            [](const err_type& e) noexcept { return false; });
     }
 
     template<typename Func>
-    constexpr bool is_err_and(Func&& f) const noexcept
+        requires std::is_invocable_r_v<bool, Func, raw_err_type>
+    constexpr bool is_err_and(Func&& f) const noexcept(std::is_nothrow_invocable_r_v<bool, Func, raw_err_type>)
     {
-        return match(
-            [](const ok_type& v) {
-                return false;
-            },
-            [&f](const err_type& e) {
-                return f(e.m_value);
-            });
+        return match([](const ok_type& v) noexcept { return false; },
+                     [&f](const err_type& e) noexcept(std::is_nothrow_invocable_r_v<bool, Func, raw_err_type>) {
+                         return std::invoke(std::forward<Func>(f), e.m_value);
+                     });
     }
 
 
     template<typename Func>
-    auto map(Func&& f) -> rs_result<decltype(f(std::declval<T>())), E> const
+        requires std::is_invocable_v<Func, raw_ok_type>
+    auto map(Func&& f) const noexcept(std::is_nothrow_invocable_v<Func, raw_ok_type>)
+        -> rs_result<std::invoke_result_t<Func, T>, E>
     {
-        using return_type = decltype(f(std::declval<T>()));
+        using return_type = std::invoke_result_t<Func, T>;
         return match(
-            [&f](const ok_type& v) {
+            [&f](const ok_type& v) noexcept(std::is_nothrow_invocable_v<Func, raw_ok_type>) {
                 return rs_result<return_type, E>{ok<return_type>{f(v.m_value)}};
             },
-            [](const err_type& e) {
-                return rs_result<return_type, E>{e};
-            });
+            [](const err_type& e) noexcept { return rs_result<return_type, E>{e}; });
     }
 
     template<typename U, typename Func>
-    auto map_or(U val, Func&& f) -> U const
+        requires std::is_invocable_r_v<U, Func, raw_ok_type>
+    auto map_or(U val, Func&& f) const noexcept(std::is_nothrow_invocable_r_v<U, Func, raw_ok_type>) -> U
     {
+
         return match(
-            [&f, &val](const ok_type& v) {
-                return f(v).match([](const hfl::ok<U>& v){ return v.m_value; }, [&val](const err_type&){return val;});
+            [&f, &val](const ok_type& v) noexcept(std::is_nothrow_invocable_r_v<U, Func, raw_ok_type>) {
+                return std::invoke(std::forward<Func>(f), v.m_value);
             },
-            [&val](const err_type&) {
-                return val;
-            });
+            [&val](const err_type&) noexcept { return val; });
     }
 
     template<typename UFunc, typename Func>
-    auto map_or_else(UFunc&& uf, Func&& f) -> decltype(uf(std::declval<err_type>())) const
+        requires std::is_invocable_r_v<std::invoke_result_t<UFunc>, UFunc>
+    auto map_or_else(UFunc&& uf, Func&& f) const
+        noexcept(std::is_nothrow_invocable_r_v<raw_ok_type, Func, raw_ok_type> and
+                 std::is_nothrow_invocable_r_v<raw_ok_type, UFunc>) -> std::invoke_result_t<UFunc>
     {
-        using return_type = decltype(uf(std::declval<err_type>()));
+        using return_type = std::invoke_result_t<UFunc>;
 
         return match(
-            [&f, &uf](const ok_type& v) {
-                return f(v).match([](const hfl::ok<return_type>& v){ return v.m_value; }, [&uf](const err_type& e){return uf(e);});
+            [&f](const ok_type& v) noexcept(std::is_nothrow_invocable_r_v<raw_ok_type, Func, raw_ok_type>) {
+                return std::invoke(std::forward<Func>(f), v.m_value);
             },
-            [&uf](const err_type& e) {
-                return uf(e);
+            [&uf](const err_type& e) noexcept(std::is_nothrow_invocable_r_v<raw_ok_type, UFunc>) {
+                return std::invoke(std::forward<UFunc>(uf));
             });
     }
 
     template<typename EFunc>
-    auto map_err(EFunc&& f) -> rs_result<T, decltype(f(std::declval<E>()))> const
+        requires std::is_invocable_v<EFunc, raw_ok_type>
+    auto map_err(EFunc&& f) const
+        noexcept(std::is_nothrow_constructible_v<rs_result<T, std::invoke_result_t<EFunc, E>>, ok_type> and
+                 std::is_nothrow_constructible_v<rs_result<T, std::invoke_result_t<EFunc, E>>, err_type>)
+            -> rs_result<T, std::invoke_result_t<EFunc, E>>
     {
-        using return_type = decltype(f(std::declval<E>()));
+        using return_type = std::invoke_result_t<EFunc, E>;
         return match(
-            [](const ok_type& v) {
+            [](const ok_type& v) noexcept(
+                std::is_nothrow_constructible_v<rs_result<T, std::invoke_result_t<EFunc, E>>, ok_type>) {
                 return rs_result<T, return_type>{v};
             },
-            [&f](const err_type& e) {
+            [&f](const err_type& e) noexcept(
+                std::is_nothrow_constructible_v<rs_result<T, std::invoke_result_t<EFunc, E>>, err_type>) {
                 return rs_result<T, return_type>{err<return_type>{f(e.m_value)}};
             });
     }
 
     template<typename Func>
-    auto and_then(Func&& f) const noexcept -> decltype(f(std::declval<T>()))
+        requires std::is_invocable_v<Func, raw_ok_type> and is_rs_result_v<std::invoke_result_t<Func, T>>
+    auto and_then(Func&& f) const noexcept(std::is_nothrow_invocable_v<Func, raw_ok_type> and
+                                           std::is_nothrow_constructible_v<std::invoke_result_t<Func, T>, err_type>)
+        -> std::invoke_result_t<Func, T>
     {
+        using return_type = std::invoke_result_t<Func, T>;
         return match(
-            [&f](const ok_type& v) {
-                return f(v.m_value);
-            },
-            [](const err_type& e) {
-                return decltype(f(std::declval<T>())){e};
-            }); 
+            [&f](const ok_type& v) noexcept(std::is_nothrow_invocable_v<Func, raw_ok_type>) { return f(v.m_value); },
+            [](const err_type& e) noexcept(std::is_nothrow_constructible_v<std::invoke_result_t<Func, T>, err_type>) {
+                return return_type{e};
+            });
     }
 
     template<typename Func>
-    auto or_else(Func&& f) const noexcept -> decltype(f(std::declval<E>()))
+        requires std::is_invocable_v<Func, raw_err_type> and is_rs_result_v<std::invoke_result_t<Func, E>>
+    auto or_else(Func&& f) const noexcept -> std::invoke_result_t<Func, E>
     {
-        return match(
-            [](const ok_type& v) {
-                return decltype(f(std::declval<E>())){v};
-            },
-            [&f](const err_type& e) {
-                return f(e.m_value);
-            }); 
+        return match([](const ok_type& v) { return std::invoke_result_t<Func, E>{v}; },
+                     [&f](const err_type& e) { return f(e.m_value); });
     }
 
-    constexpr auto as_mut() noexcept -> rs_result<row_ok_type&, row_err_type&>
+    constexpr auto as_mut() noexcept -> rs_result<raw_ok_type&, raw_err_type&>
     {
         return match(
-            [](ok_type& v) {
-                return rs_result<row_ok_type&, row_err_type&>{ hfl::ok<row_ok_type&>{v.m_value}};
+            [](ok_type& v) noexcept {
+                return rs_result<raw_ok_type&, raw_err_type&>{hfl::ok<raw_ok_type&>{v.m_value}};
             },
-            [](err_type& e) {
-                return rs_result<row_ok_type&, row_err_type&>{ hfl::err<row_err_type&>{e.m_value}};
+            [](err_type& e) noexcept {
+                return rs_result<raw_ok_type&, raw_err_type&>{hfl::err<raw_err_type&>{e.m_value}};
             });
     }
 
-    constexpr auto as_ref() const noexcept -> rs_result<const row_ok_type&, const row_err_type&>
+    constexpr auto as_ref() const noexcept -> rs_result<const raw_ok_type&, const raw_err_type&>
     {
         return match(
-            [](const ok_type& v) {
-                return rs_result<const row_ok_type&, const row_err_type&>{ hfl::ok<const row_ok_type&>{v.m_value}};
+            [](const ok_type& v) noexcept {
+                return rs_result<const raw_ok_type&, const raw_err_type&>{hfl::ok<const raw_ok_type&>{v.m_value}};
             },
-            [](const err_type& e) {
-                return rs_result<const row_ok_type&, const row_err_type&>{ hfl::err<const row_err_type&>{e.m_value}};
+            [](const err_type& e) noexcept {
+                return rs_result<const raw_ok_type&, const raw_err_type&>{hfl::err<const raw_err_type&>{e.m_value}};
             });
     }
 
-    constexpr auto copied() const noexcept -> rs_result<row_ok_type, row_err_type>
+    constexpr auto copied() const noexcept -> rs_result<raw_ok_type, raw_err_type>
     {
-        return match(
-            [](const ok_type& v) {
-                return rs_result<row_ok_type, row_err_type>{ hfl::ok<row_ok_type>{v.m_value}};
-            },
-            [](const err_type& e) {
-                return rs_result<row_ok_type, row_err_type>{ hfl::err<row_err_type>{e.m_value}};
-            });
+        if constexpr (std::is_copy_constructible_v<raw_ok_type>)
+        {
+
+            return match(
+                [](const ok_type& v) noexcept {
+                    return rs_result<raw_ok_type, raw_err_type>{hfl::ok<raw_ok_type>{v.m_value}};
+                },
+                [](const err_type& e) noexcept {
+                    return rs_result<raw_ok_type, raw_err_type>{hfl::err<raw_err_type>{e.m_value}};
+                });
+        }
+        else
+        {
+            return rs_result<raw_ok_type, raw_err_type>{hfl::err<raw_err_type>{}};
+        }
     }
-    
+
+    constexpr auto expect(const std::string& msg) const noexcept -> raw_ok_type
+    {
+        if (is_ok()) [[likely]]
+        {
+            return inter_unwrap_ok().m_value;
+        }
+        else
+        {
+            throw unwrap_exception{};
+        }
+    }
+
 private:
     constexpr err_type inter_unwrap_err() const noexcept
     {
@@ -361,37 +421,45 @@ private:
 
 
 template<typename FT, typename FE, typename Func>
-constexpr auto mbind(const rs_result<FT, FE>& res, Func&& f) -> decltype(f(std::declval<FT>()))
+    requires std::is_invocable_v<Func, FT> and is_rs_result_v<std::invoke_result_t<Func, FT>>
+constexpr auto mbind(const rs_result<FT, FE>& res, Func&& f) noexcept(
+    std::is_nothrow_invocable_v<Func, FT> and
+    std::is_nothrow_constructible_v<std::invoke_result_t<Func, FT>, rs_result<FT, FE>::err_type>)
+    -> std::invoke_result_t<Func, FT>
 {
-        return res.match(
-            [&f](const rs_result<FT, FE>::ok_type& v) {
-                return f(v.m_value);
-            },
-            [](const rs_result<FT, FE>::err_type& e) {
-                return decltype(f(std::declval<FT>())){e};
-            }); 
+
+    return res.match([&f](const rs_result<FT, FE>::ok_type& v) noexcept(
+                         std::is_nothrow_invocable_v<Func, FT>) { return f(v.m_value); },
+                     [](const rs_result<FT, FE>::err_type& e) noexcept { return std::invoke_result_t<Func, FT>{e}; });
 }
 
 template<typename FT, typename FE, typename Func>
-constexpr auto mbind(rs_result<FT, FE>&& res, Func&& f) -> decltype(f(std::declval<FT>()))
+    requires std::is_invocable_v<Func, FT&&> and is_rs_result_v<std::invoke_result_t<Func, FT&&>>
+constexpr auto mbind(rs_result<FT, FE>&& res, Func&& f) noexcept(
+    std::is_nothrow_invocable_v<Func, FT&&> and
+    std::is_nothrow_constructible_v<std::invoke_result_t<Func, FT&&>, rs_result<FT, FE>::err_type>)
+    -> std::invoke_result_t<Func, FT&&>
 {
-        return std::move(res).match(
-            [&f](rs_result<FT, FE>::ok_type&& v) {
-                return f(std::move(v.m_value));
-            },
-            [](rs_result<FT, FE>::err_type&& e) {
-                return decltype(f(std::declval<FT>())){std::move(e)};
-            }); 
+    return std::move(res).match(
+        [&f](rs_result<FT, FE>::ok_type&& v) noexcept(std::is_nothrow_invocable_v<Func, FT&&>) {
+            return f(std::move(v.m_value));
+        },
+        [](rs_result<FT, FE>::err_type&& e) noexcept { return std::invoke_result_t<Func, FT&&>{std::move(e)}; });
 }
 
 template<typename T, typename E, typename Func>
-constexpr decltype(auto) operator|(const rs_result<T, E>& res, Func&& f)
+    requires std::is_invocable_v<Func, T> and is_rs_result_v<std::invoke_result_t<Func, T>>
+constexpr decltype(auto) operator|(const rs_result<T, E>& res, Func&& f) noexcept(
+    std::is_nothrow_invocable_v<Func, T> and
+    std::is_nothrow_constructible_v<std::invoke_result_t<Func, T>, rs_result<T, E>::err_type>)
 {
     return mbind<T, E, Func>(res, std::forward<Func>(f));
 }
 
 template<typename T, typename E, typename Func>
-constexpr decltype(auto) operator|(rs_result<T, E>&& res, Func&& f)
+constexpr decltype(auto) operator|(rs_result<T, E>&& res, Func&& f) noexcept(
+    std::is_nothrow_invocable_v<Func, T&&> and
+    std::is_nothrow_constructible_v<std::invoke_result_t<Func, T&&>, rs_result<T, E>::err_type>)
 {
     return mbind<T, E, Func>(std::move(res), std::forward<Func>(f));
 }
@@ -399,17 +467,21 @@ constexpr decltype(auto) operator|(rs_result<T, E>&& res, Func&& f)
 template<typename T, typename E, typename... Funcs>
 constexpr decltype(auto) pipeline(const rs_result<T, E>& res, Funcs&&... f)
 {
-    return ((res | ... | f));
+    return ((res | ... | std::forward<Funcs>(f)));
 }
 
 template<typename T, typename E, typename... Funcs>
 constexpr decltype(auto) pipeline(rs_result<T, E>&& res, Funcs&&... f)
 {
-    return ((std::move(res) | ... | f));
+    return ((std::move(res) | ... | std::forward<Funcs>(f)));
 }
 
 template<typename T, typename E, typename OkFunc, typename ErrFunc>
-constexpr decltype(auto) match(const rs_result<T, E>& res, OkFunc&& val_func, ErrFunc&& err_func)
+    requires std::is_invocable_v<OkFunc, typename rs_result<T, E>::ok_type> and
+             std::is_invocable_v<ErrFunc, typename rs_result<T, E>::err_type>
+constexpr decltype(auto) match(const rs_result<T, E>& res, OkFunc&& val_func, ErrFunc&& err_func) noexcept(
+    std::is_nothrow_invocable_v<OkFunc, rs_result<T, E>::ok_type> and
+    std::is_nothrow_invocable_v<ErrFunc, rs_result<T, E>::err_type>)
 {
     return res.match(std::forward<OkFunc>(val_func), std::forward<ErrFunc>(err_func));
 }
