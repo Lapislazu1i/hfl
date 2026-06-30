@@ -1,5 +1,7 @@
 #pragma once
+#include "rs_common.hpp"
 #include <exception>
+#include <functional>
 #include <string>
 #include <type_traits>
 #include <variant>
@@ -7,54 +9,6 @@
 namespace hfl
 {
 
-template<typename T>
-struct ok
-{
-    T m_value;
-};
-
-template<typename T>
-ok(T) -> ok<T>;
-
-template<typename E>
-struct err
-{
-    E m_value;
-};
-
-template<typename E>
-err(E) -> err<E>;
-
-template<typename E>
-struct unwrap_exception : public std::exception
-{
-    unwrap_exception(const err<E>& e) : m_e(e)
-    {
-    }
-    const char* what() const noexcept override
-    {
-        return "unwrap_exception";
-    }
-    err<E> m_e;
-};
-
-template<typename T>
-struct unwrap_err_exception : public std::exception
-{
-    unwrap_err_exception(const ok<T>& v) : m_v(v)
-    {
-    }
-
-    const char* what() const noexcept override
-    {
-        return "unwrap_err_exception";
-    }
-
-    ok<T> m_v;
-};
-
-template<typename T, typename E>
-class rs_result;
 
 template<typename T>
 struct is_rs_result : std::false_type
@@ -68,6 +22,7 @@ struct is_rs_result<rs_result<T, E>> : std::true_type
 
 template<typename T>
 constexpr bool is_rs_result_v = is_rs_result<T>::value;
+
 
 template<typename T, typename E>
 class rs_result
@@ -83,6 +38,18 @@ public:
 
     template<typename FT, typename FE, typename Func>
     friend constexpr auto mbind(rs_result<FT, FE>&& res, Func&& f) -> decltype(f(std::declval<FT>()));
+
+    template<typename U = raw_ok_type>
+        requires(!std::is_same_v<std::remove_cvref_t<U>, raw_err_type>)
+    constexpr explicit rs_result(U&& val) noexcept(std::is_nothrow_constructible_v<ok_type, U&&>)
+        : m_value(std::in_place_type<ok_type>, std::forward<U>(val))
+    {
+    }
+
+    constexpr explicit rs_result(std::in_place_type_t<ok_type>, raw_ok_type val) noexcept
+        : m_value(std::in_place_type<ok_type>, val)
+    {
+    }
 
     constexpr rs_result() noexcept : m_value(ok<T>{})
     {
@@ -154,6 +121,7 @@ public:
     }
 
     template<typename U>
+        requires std::is_constructible_v<T, U>
     constexpr T unwrap_or_default(U&& val) const noexcept
     {
         if (is_err())
@@ -235,14 +203,12 @@ public:
         }
     }
 
-    void swap(rs_result& b) noexcept(
-        std::is_nothrow_invocable_v<std::swap, std::variant<ok_type, err_type>&, std::variant<ok_type, err_type>&>)
+    void swap(rs_result& b) noexcept(std::is_nothrow_swappable_v<std::variant<ok_type, err_type>>)
     {
         std::swap(m_value, b.m_value);
     }
 
-    friend void swap(rs_result& a, rs_result& b) noexcept(
-        std::is_nothrow_invocable_v<std::swap, std::variant<ok_type, err_type>&, std::variant<ok_type, err_type>&>)
+    friend void swap(rs_result& a, rs_result& b) noexcept(std::is_nothrow_swappable_v<std::variant<ok_type, err_type>>)
     {
         a.swap(b);
     }
@@ -401,7 +367,7 @@ public:
         }
         else
         {
-            throw unwrap_exception{};
+            throw unwrap_exception{err_type{}};
         }
     }
 
@@ -424,7 +390,7 @@ template<typename FT, typename FE, typename Func>
     requires std::is_invocable_v<Func, FT> and is_rs_result_v<std::invoke_result_t<Func, FT>>
 constexpr auto mbind(const rs_result<FT, FE>& res, Func&& f) noexcept(
     std::is_nothrow_invocable_v<Func, FT> and
-    std::is_nothrow_constructible_v<std::invoke_result_t<Func, FT>, rs_result<FT, FE>::err_type>)
+    std::is_nothrow_constructible_v<typename std::invoke_result_t<Func, FT>, typename rs_result<FT, FE>::err_type>)
     -> std::invoke_result_t<Func, FT>
 {
 
@@ -437,7 +403,7 @@ template<typename FT, typename FE, typename Func>
     requires std::is_invocable_v<Func, FT&&> and is_rs_result_v<std::invoke_result_t<Func, FT&&>>
 constexpr auto mbind(rs_result<FT, FE>&& res, Func&& f) noexcept(
     std::is_nothrow_invocable_v<Func, FT&&> and
-    std::is_nothrow_constructible_v<std::invoke_result_t<Func, FT&&>, rs_result<FT, FE>::err_type>)
+    std::is_nothrow_constructible_v<typename std::invoke_result_t<Func, FT&&>, typename rs_result<FT, FE>::err_type>)
     -> std::invoke_result_t<Func, FT&&>
 {
     return std::move(res).match(
@@ -451,7 +417,7 @@ template<typename T, typename E, typename Func>
     requires std::is_invocable_v<Func, T> and is_rs_result_v<std::invoke_result_t<Func, T>>
 constexpr decltype(auto) operator|(const rs_result<T, E>& res, Func&& f) noexcept(
     std::is_nothrow_invocable_v<Func, T> and
-    std::is_nothrow_constructible_v<std::invoke_result_t<Func, T>, rs_result<T, E>::err_type>)
+    std::is_nothrow_constructible_v<typename std::invoke_result_t<Func, T>, typename rs_result<T, E>::err_type>)
 {
     return mbind<T, E, Func>(res, std::forward<Func>(f));
 }
@@ -459,7 +425,7 @@ constexpr decltype(auto) operator|(const rs_result<T, E>& res, Func&& f) noexcep
 template<typename T, typename E, typename Func>
 constexpr decltype(auto) operator|(rs_result<T, E>&& res, Func&& f) noexcept(
     std::is_nothrow_invocable_v<Func, T&&> and
-    std::is_nothrow_constructible_v<std::invoke_result_t<Func, T&&>, rs_result<T, E>::err_type>)
+    std::is_nothrow_constructible_v<typename std::invoke_result_t<Func, T&&>, typename rs_result<T, E>::err_type>)
 {
     return mbind<T, E, Func>(std::move(res), std::forward<Func>(f));
 }
@@ -480,8 +446,8 @@ template<typename T, typename E, typename OkFunc, typename ErrFunc>
     requires std::is_invocable_v<OkFunc, typename rs_result<T, E>::ok_type> and
              std::is_invocable_v<ErrFunc, typename rs_result<T, E>::err_type>
 constexpr decltype(auto) match(const rs_result<T, E>& res, OkFunc&& val_func, ErrFunc&& err_func) noexcept(
-    std::is_nothrow_invocable_v<OkFunc, rs_result<T, E>::ok_type> and
-    std::is_nothrow_invocable_v<ErrFunc, rs_result<T, E>::err_type>)
+    std::is_nothrow_invocable_v<OkFunc, typename rs_result<T, E>::ok_type> and
+    std::is_nothrow_invocable_v<ErrFunc, typename rs_result<T, E>::err_type>)
 {
     return res.match(std::forward<OkFunc>(val_func), std::forward<ErrFunc>(err_func));
 }

@@ -61,7 +61,7 @@ public:
     {
     }
 
-    constexpr recursive_memoize_helper(const recursive_memoize_helper& other) : m_f(other.f)
+    constexpr recursive_memoize_helper(const recursive_memoize_helper& other) : m_f(other.m_f)
     {
     }
 

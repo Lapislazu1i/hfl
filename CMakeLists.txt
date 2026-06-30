@@ -46,6 +46,7 @@ add_executable(
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_mbind_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/result_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/rs_result_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/test/rs_option_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/memo_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/test/curried_test.cpp"
 
